@@ -4,13 +4,17 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
+from .database import Base, SessionLocal, engine
+from .repositories import upsert_search_result
 from .schemas import CompanySearchResponse, CompanySearchResult
 from .search import get_search_provider
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="ReachOut API",
     description="Global company discovery and outreach intelligence platform.",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 app.add_middleware(
@@ -44,19 +48,28 @@ async def search_companies(
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Search provider request failed.") from exc
 
-    companies = []
-    for result in results:
-        parsed = urlparse(result.url)
-        website = f"{parsed.scheme}://{parsed.netloc}" if parsed.netloc else result.url
-        companies.append(
-            CompanySearchResult(
-                name=parsed.netloc.removeprefix("www.") or result.title,
-                website=website,
-                title=result.title,
-                description=result.description,
-                source_url=result.url,
+    db = SessionLocal()
+    try:
+        companies = []
+        for result in results:
+            parsed = urlparse(result.url)
+            website = f"{parsed.scheme}://{parsed.netloc}" if parsed.netloc else result.url
+            company = upsert_search_result(db, result)
+            company.website = website
+            company.canonical_url = website
+            company.discovered_from = result.url
+            companies.append(
+                CompanySearchResult(
+                    name=parsed.netloc.removeprefix("www.") or result.title,
+                    website=website,
+                    title=result.title,
+                    description=result.description,
+                    source_url=result.url,
+                )
             )
-        )
+        db.commit()
+    finally:
+        db.close()
 
     return CompanySearchResponse(
         query=q,
