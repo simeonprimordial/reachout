@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .database import Base, SessionLocal, engine
+from .enrichment_routes import router as enrichment_router
 from .repositories import upsert_search_result
 from .schemas import CompanySearchResponse, CompanySearchResult
 from .search import get_search_provider
@@ -14,7 +15,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="ReachOut API",
     description="Global company discovery and outreach intelligence platform.",
-    version="0.2.0",
+    version="0.3.0",
 )
 
 app.add_middleware(
@@ -24,6 +25,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(enrichment_router)
 
 
 @app.get("/api/health")
