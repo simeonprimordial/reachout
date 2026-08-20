@@ -1,8 +1,46 @@
-import React from "react";
+import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
+const API_BASE_URL = "http://localhost:8000";
+
 function App() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function discover(searchQuery = query) {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) return;
+
+    setLoading(true);
+    setError("");
+    setResults([]);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/companies?q=${encodeURIComponent(trimmed)}`
+      );
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.detail || "Unable to search companies.");
+      }
+
+      setResults(payload.results || []);
+    } catch (err) {
+      setError(err.message || "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    discover();
+  }
+
   return (
     <main className="page">
       <nav className="nav">
@@ -17,21 +55,67 @@ function App() {
           Discover companies worldwide, identify relevant decision-makers, and build targeted career outreach.
         </p>
 
-        <div className="search-box">
+        <form className="search-box" onSubmit={handleSubmit}>
           <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
             aria-label="Search companies"
             placeholder="Try: AI startups in Japan using AWS and Kubernetes"
           />
-          <button type="button">Discover</button>
-        </div>
+          <button type="submit" disabled={loading}>
+            {loading ? "Searching..." : "Discover"}
+          </button>
+        </form>
 
         <div className="examples">
           <span>Try:</span>
-          <button type="button">Cloud startups in Japan</button>
-          <button type="button">AWS companies in Germany</button>
-          <button type="button">DevSecOps opportunities in Singapore</button>
+          {["Cloud startups in Japan", "AWS companies in Germany", "DevSecOps opportunities in Singapore"].map((example) => (
+            <button
+              type="button"
+              key={example}
+              onClick={() => {
+                setQuery(example);
+                discover(example);
+              }}
+            >
+              {example}
+            </button>
+          ))}
         </div>
       </section>
+
+      {(loading || error || results.length > 0) && (
+        <section className="results-section">
+          <div className="results-heading">
+            <div>
+              <p className="eyebrow">DISCOVERY RESULTS</p>
+              <h2>{loading ? "Searching the web..." : `${results.length} results found`}</h2>
+            </div>
+          </div>
+
+          {error && <div className="status error">{error}</div>}
+
+          {!loading && !error && results.length > 0 && (
+            <div className="results-grid">
+              {results.map((company) => (
+                <article className="company-card" key={company.source_url}>
+                  <div className="company-domain">{company.website}</div>
+                  <h3>{company.name}</h3>
+                  <h4>{company.title}</h4>
+                  <p>{company.description || "No description available from the search result."}</p>
+                  <a href={company.source_url} target="_blank" rel="noreferrer">
+                    View source →
+                  </a>
+                </article>
+              ))}
+            </div>
+          )}
+
+          {!loading && !error && results.length === 0 && (
+            <div className="status">No results found. Try a broader search.</div>
+          )}
+        </section>
+      )}
 
       <section className="features">
         <article><strong>01</strong><h2>Discover</h2><p>Find companies beyond traditional job boards.</p></article>
